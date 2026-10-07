@@ -22,14 +22,14 @@ public class WithTransactionInterceptor extends AbstractUniInterceptor {
     public Object intercept(InvocationContext context) throws Exception {
         // Bindings are validated at build time - method-level binding declared on a method that does not return Uni results in a build failure
         // However, a class-level binding implies that methods that do not return Uni are just a no-op
-        if (isUniReturnType(context)) {
+        if (isUniReturnType(context) || isKotlinSuspendMethod(context)) {
             Context vertxContext = SessionOperations.vertxContext();
             if (ContextLocals.get(vertxContext, TRANSACTIONAL_METHOD_KEY, null) != null) {
-                return Uni.createFrom().failure(
+                return fromUni(context, Uni.createFrom().failure(
                         new UnsupportedOperationException(
                                 "Calling a method annotated with @WithTransaction from a method annotated with @Transactional is not supported. "
                                         + "Use either @Transactional or @WithSessionOnDemand/@WithSession/@WithTransaction, "
-                                        + "but not both, throughout your whole application."));
+                                        + "but not both, throughout your whole application.")));
             }
 
             // Annotate current method so that we can validate mixing of @WithTransaction and @Transactional
@@ -38,11 +38,12 @@ public class WithTransactionInterceptor extends AbstractUniInterceptor {
             WithTransaction withTransaction = getAnnotation(context);
             String persistenceUnitName = withTransaction.value();
             if (withTransaction.stateless()) {
-                return SessionOperations.withStatelessTransaction(persistenceUnitName, () -> proceedUni(context))
-                        .eventually(() -> clearWithTransactionMethod(vertxContext));
+                return fromUni(context,
+                        SessionOperations.withStatelessTransaction(persistenceUnitName, () -> proceedUni(context))
+                                .eventually(() -> clearWithTransactionMethod(vertxContext)));
             } else {
-                return SessionOperations.withTransaction(persistenceUnitName, () -> proceedUni(context))
-                        .eventually(() -> clearWithTransactionMethod(vertxContext));
+                return fromUni(context, SessionOperations.withTransaction(persistenceUnitName, () -> proceedUni(context))
+                        .eventually(() -> clearWithTransactionMethod(vertxContext)));
             }
         }
         return context.proceed();

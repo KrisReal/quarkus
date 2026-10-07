@@ -16,13 +16,13 @@ public class WithSessionInterceptor extends AbstractUniInterceptor {
     public Object intercept(InvocationContext context) throws Exception {
         // Bindings are validated at build time - method-level binding declared on a method that does not return Uni results in a build failure
         // However, a class-level binding implies that methods that do not return Uni are just a no-op
-        if (isUniReturnType(context)) {
+        if (isUniReturnType(context) || isKotlinSuspendMethod(context)) {
             WithSession withSession = getAnnotation(context);
             String persistenceUnitName = withSession.value();
             if (withSession.stateless()) {
-                return SessionOperations.withStatelessSession(persistenceUnitName, s -> proceedUni(context));
+                return fromUni(context, SessionOperations.withStatelessSession(persistenceUnitName, s -> proceedUni(context)));
             } else {
-                return SessionOperations.withSession(persistenceUnitName, s -> proceedUni(context));
+                return fromUni(context, SessionOperations.withSession(persistenceUnitName, s -> proceedUni(context)));
             }
         }
         return context.proceed();

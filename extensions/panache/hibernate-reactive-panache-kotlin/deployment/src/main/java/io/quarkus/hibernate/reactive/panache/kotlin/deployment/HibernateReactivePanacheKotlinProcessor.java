@@ -35,6 +35,8 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.JandexUtil;
 import io.quarkus.hibernate.orm.deployment.spi.AdditionalJpaModelBuildItem;
 import io.quarkus.hibernate.orm.deployment.spi.JpaModelPersistenceUnitMappingBuildItem;
+import io.quarkus.hibernate.reactive.panache.common.deployment.KotlinSuspendMethodSupportBuildItem;
+import io.quarkus.hibernate.reactive.panache.common.runtime.PanacheHibernateRecorder;
 import io.quarkus.hibernate.reactive.panache.kotlin.runtime.PanacheKotlinReactiveRecorder;
 import io.quarkus.panache.common.deployment.KotlinPanacheCompanionEnhancer;
 import io.quarkus.panache.common.deployment.KotlinPanacheEntityEnhancer;
@@ -67,6 +69,14 @@ public class HibernateReactivePanacheKotlinProcessor {
                 // The build items tell the Hibernate extension to process the classes at build time:
                 // add to Jandex index, bytecode enhancement, proxy generation, ...
                 Set.of());
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    public KotlinSuspendMethodSupportBuildItem registerKotlinSuspendMethodHandler(PanacheHibernateRecorder recorder,
+            PanacheKotlinReactiveRecorder kotlinRecorder) {
+        recorder.setKotlinSuspendMethodHandler(kotlinRecorder.createKotlinSuspendMethodHandler());
+        return new KotlinSuspendMethodSupportBuildItem();
     }
 
     @BuildStep

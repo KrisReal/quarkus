@@ -837,6 +837,33 @@ If you want any changes made to be rolled back at the end of
 the test you can use the `io.quarkus.test.TestReactiveTransaction` annotation.
 This will run the test method in a transaction, but roll it back once the test method is complete to revert any database changes.
 
+[[kotlin-coroutines]]
+=== Kotlin coroutines
+
+If you use the `quarkus-hibernate-reactive-panache-kotlin` extension, then `@WithSession` and `@WithTransaction` can also be declared on Kotlin `suspend` functions.
+The session or transaction then spans the whole execution of the `suspend` function, including all suspension points, and the calling coroutine is resumed once the session is closed or the transaction is committed (or rolled back).
+If declared on a class, then all `suspend` functions of the class are intercepted as well.
+
+[source,kotlin]
+----
+@ApplicationScoped
+class PersonService {
+
+    @WithTransaction
+    suspend fun create(name: String): Person {
+        val person = Person().apply { this.name = name }
+        return person.persist<Person>().awaitSuspending() // <1>
+    }
+}
+----
+<1> `awaitSuspending()` is provided by the `io.smallrye.reactive:mutiny-kotlin` library.
+
+[IMPORTANT]
+====
+The `suspend` function must be called from a coroutine that runs on a Vert.x context, e.g. from a `suspend` Jakarta REST resource method when using the `quarkus-rest-kotlin` extension.
+Note that the `suspend` function and the class that declares it must not be `final`, so that they can be intercepted; see the `all-open` compiler plugin configuration in xref:kotlin.adoc#important-maven-configuration-points[the Kotlin guide].
+====
+
 == Lock management
 
 Panache provides direct support for database locking with your entity/repository, using `findById(Object, LockModeType)` or `find().withLock(LockModeType)`.

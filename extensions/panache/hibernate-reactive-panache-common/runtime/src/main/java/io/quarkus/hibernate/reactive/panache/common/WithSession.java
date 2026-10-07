@@ -21,6 +21,10 @@ import jakarta.interceptor.InterceptorBinding;
  * <p>
  * A method annotated with this annotation must return {@link io.smallrye.mutiny.Uni}. If declared on a class then all methods
  * that return {@link io.smallrye.mutiny.Uni} are considered; all other methods are ignored.
+ * <p>
+ * If the Hibernate Reactive Panache Kotlin extension is present, then a Kotlin {@code suspend} function may be annotated as
+ * well; the scope then spans the whole execution of the {@code suspend} function. If declared on a class then all Kotlin
+ * {@code suspend} functions are considered too.
  */
 @Inherited
 @InterceptorBinding

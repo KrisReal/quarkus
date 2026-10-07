@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 
 import jakarta.annotation.Priority;
@@ -30,6 +31,7 @@ import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildIt
 import io.quarkus.arc.processor.Annotations;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanInfo;
+import io.quarkus.arc.processor.KotlinUtils;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.IsTest;
@@ -101,14 +103,21 @@ public final class PanacheJpaCommonResourceProcessor {
 
     @BuildStep
     void validateInterceptedMethods(ValidationPhaseBuildItem validationPhase,
+            Optional<KotlinSuspendMethodSupportBuildItem> kotlinSuspendMethodSupport,
             BuildProducer<ValidationErrorBuildItem> errors) {
         List<DotName> bindings = List.of(DotNames.REACTIVE_TRANSACTIONAL, DotNames.WITH_SESSION,
                 DotNames.WITH_SESSION_ON_DEMAND, DotNames.WITH_TRANSACTION);
+        // @WithSession and @WithTransaction also support Kotlin suspend functions
+        List<DotName> suspendMethodBindings = List.of(DotNames.REACTIVE_TRANSACTIONAL, DotNames.WITH_SESSION_ON_DEMAND);
         for (BeanInfo bean : validationPhase.getContext().beans().withAroundInvokeInterceptor()) {
             for (Entry<MethodInfo, Set<AnnotationInstance>> e : bean.getInterceptedMethodsBindings().entrySet()) {
                 DotName returnTypeName = e.getKey().returnType().name();
                 if (returnTypeName.equals(DotNames.UNI)) {
                     // Method returns Uni - no need to iterate over the bindings
+                    continue;
+                }
+                if (kotlinSuspendMethodSupport.isPresent() && KotlinUtils.isKotlinSuspendMethod(e.getKey())) {
+                    validateBindings(suspendMethodBindings, e, errors);
                     continue;
                 }
                 validateBindings(bindings, e, errors);
