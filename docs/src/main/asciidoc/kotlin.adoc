@@ -496,6 +496,9 @@ The following extensions provide support for Kotlin Coroutines by allowing the u
 |`quarkus-rest-client`
 |Support is provided for REST Client interface methods
 
+|`quarkus-hibernate-reactive-panache-kotlin`
+|Support is provided for methods annotated with `@WithSession` or `@WithTransaction`, see xref:hibernate-reactive-panache.adoc#kotlin-coroutines[the Hibernate Reactive with Panache guide]
+
 |`quarkus-messaging`
 |Support is provided for Reactive messaging methods
 

@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 
 import jakarta.annotation.Priority;
@@ -30,6 +31,7 @@ import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildIt
 import io.quarkus.arc.processor.Annotations;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanInfo;
+import io.quarkus.arc.processor.KotlinUtils;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.IsTest;
@@ -56,6 +58,9 @@ public final class PanacheJpaCommonResourceProcessor {
     private static final Logger LOG = Logger.getLogger(PanacheJpaCommonResourceProcessor.class);
 
     private static final String TEST_REACTIVE_TRANSACTION = "io.quarkus.test.TestReactiveTransaction";
+
+    private static final String KOTLIN_SUSPEND_METHOD_HINT = "\n\t- a Kotlin suspend function can only be annotated with"
+            + " @WithSession or @WithTransaction, which requires the quarkus-hibernate-reactive-panache-kotlin extension";
 
     @BuildStep(onlyIf = IsTest.class)
     void testTx(BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItemBuildProducer,
@@ -101,9 +106,12 @@ public final class PanacheJpaCommonResourceProcessor {
 
     @BuildStep
     void validateInterceptedMethods(ValidationPhaseBuildItem validationPhase,
+            Optional<KotlinSuspendMethodSupportBuildItem> kotlinSuspendMethodSupport,
             BuildProducer<ValidationErrorBuildItem> errors) {
         List<DotName> bindings = List.of(DotNames.REACTIVE_TRANSACTIONAL, DotNames.WITH_SESSION,
                 DotNames.WITH_SESSION_ON_DEMAND, DotNames.WITH_TRANSACTION);
+        // @WithSession and @WithTransaction also support Kotlin suspend functions
+        List<DotName> suspendMethodBindings = List.of(DotNames.REACTIVE_TRANSACTIONAL, DotNames.WITH_SESSION_ON_DEMAND);
         for (BeanInfo bean : validationPhase.getContext().beans().withAroundInvokeInterceptor()) {
             for (Entry<MethodInfo, Set<AnnotationInstance>> e : bean.getInterceptedMethodsBindings().entrySet()) {
                 DotName returnTypeName = e.getKey().returnType().name();
@@ -111,7 +119,12 @@ public final class PanacheJpaCommonResourceProcessor {
                     // Method returns Uni - no need to iterate over the bindings
                     continue;
                 }
-                validateBindings(bindings, e, errors);
+                if (KotlinUtils.isKotlinSuspendMethod(e.getKey())) {
+                    validateBindings(kotlinSuspendMethodSupport.isPresent() ? suspendMethodBindings : bindings, e,
+                            KOTLIN_SUSPEND_METHOD_HINT, errors);
+                    continue;
+                }
+                validateBindings(bindings, e, "", errors);
             }
         }
     }
@@ -273,7 +286,7 @@ public final class PanacheJpaCommonResourceProcessor {
         }
     }
 
-    private void validateBindings(List<DotName> bindings, Entry<MethodInfo, Set<AnnotationInstance>> entry,
+    private void validateBindings(List<DotName> bindings, Entry<MethodInfo, Set<AnnotationInstance>> entry, String hint,
             BuildProducer<ValidationErrorBuildItem> errors) {
         for (DotName binding : bindings) {
             for (AnnotationInstance annotation : entry.getValue()) {
@@ -284,7 +297,8 @@ public final class PanacheJpaCommonResourceProcessor {
                                         "A method annotated with @"
                                                 + binding.withoutPackagePrefix()
                                                 + " must return io.smallrye.mutiny.Uni: "
-                                                + entry.getKey() + " declared on " + entry.getKey().declaringClass())));
+                                                + entry.getKey() + " declared on " + entry.getKey().declaringClass()
+                                                + hint)));
                     } else {
                         LOG.debugf("Class-level binding %s will be ignored for method %s() declared on %s", binding,
                                 entry.getKey().name(), entry.getKey().declaringClass());
